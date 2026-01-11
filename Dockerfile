@@ -55,7 +55,7 @@ RUN /actions-runner/bin/installdependencies.sh
 # Install Kaniko executor for building Docker images without Docker daemon
 ARG KANIKO_VERSION=v1.23.2
 RUN mkdir -p /kaniko && \
-    wget -q https://github.com/GoogleContainerTools/kaniko/releases/download/${KANIKO_VERSION}/executor-amd64 -O /kaniko/executor && \
+    curl -sL https://github.com/GoogleContainerTools/kaniko/releases/download/${KANIKO_VERSION}/executor-amd64 -o /kaniko/executor && \
     chmod +x /kaniko/executor && \
     ln -s /kaniko/executor /usr/local/bin/kaniko && \
     mkdir -p /kaniko/.docker
