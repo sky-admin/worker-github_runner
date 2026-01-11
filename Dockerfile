@@ -45,9 +45,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # Download and install GitHub Actions runner
 RUN mkdir actions-runner && cd actions-runner && \
-    curl -O -L https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz && \
-    tar xzf ./actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz && \
-    rm -rf ./actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz
+    curl -o actions-runner-linux-x64-2.330.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.330.0/actions-runner-linux-x64-2.330.0.tar.gz && \
+    tar xzf ./actions-runner-linux-x64-2.330.0.tar.gz && \
+    rm -rf ./actions-runner-linux-x64-2.330.0.tar.gz
 
 # Install additional dependencies
 RUN /actions-runner/bin/installdependencies.sh
