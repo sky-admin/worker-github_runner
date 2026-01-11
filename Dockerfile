@@ -40,8 +40,8 @@ RUN apt-get update && \
 # Install Python dependencies
 COPY builder/requirements.txt /requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install --upgrade pip && \
-    pip3 install --upgrade -r /requirements.txt --no-cache-dir && \
+    pip3 install --upgrade pip --break-system-packages && \
+    pip3 install --upgrade -r /requirements.txt --no-cache-dir --break-system-packages && \
     rm /requirements.txt
 
 # Download and install GitHub Actions runner
