@@ -129,3 +129,44 @@ Note: The project uses `~=` for runpod to allow patch updates within the same ma
 - GitHub runner version updated from 2.305.0 to 2.330.0
 - CUDA version updated from 11.7.1 to 12.6.3 (GPU only)
 - Ubuntu version updated from 20.04 to 24.04
+
+### RunPod Docker Limitations
+
+**Important**: RunPod manages the Docker daemon, which means:
+- You cannot run Docker commands inside the Pod
+- No access to `/var/run/docker.sock`
+- Docker-in-Docker (DinD) is not available
+- Standard `docker build` will fail
+
+### Kaniko Integration
+
+To build Docker images in RunPod environment, this runner includes **Kaniko**:
+
+- **What is Kaniko**: A tool for building container images without Docker daemon
+- **Installation**: Pre-installed at `/kaniko/executor` with symlink at `/usr/local/bin/kaniko`
+- **Version**: v1.23.2 (configurable via `KANIKO_VERSION` build arg)
+- **Config directory**: `/kaniko/.docker/`
+- **Environment**: `DOCKER_CONFIG=/kaniko/.docker`
+
+**Basic usage**:
+```bash
+kaniko \
+  --dockerfile=./Dockerfile \
+  --context=. \
+  --destination=docker.io/username/image:tag \
+  --cache=true
+```
+
+**Example workflow**: See `.github/workflows/example-kaniko-build.yml` for a complete example
+
+### Best Practices for Building Images
+
+1. **Use Kaniko** instead of Docker for building images
+2. **Configure authentication** before building:
+   ```bash
+   mkdir -p /kaniko/.docker
+   echo '{"auths":{"https://index.docker.io/v1/":{"auth":"BASE64_AUTH"}}}' > /kaniko/.docker/config.json
+   ```
+3. **Enable caching** to speed up builds: `--cache=true --cache-repo=docker.io/username/cache`
+4. **Clean up** authentication config after build for security
+5. **Use GitHub Secrets** for Docker Hub credentials

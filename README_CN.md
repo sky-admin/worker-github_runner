@@ -143,6 +143,93 @@
 | `BUILD_TYPE` | 构建类型(gpu/cpu) | `gpu` | `--build-arg BUILD_TYPE=cpu` |
 | `RUNNER_VERSION` | GitHub Runner 版本 | `2.330.0` | `--build-arg RUNNER_VERSION=2.330.0` |
 | `CUDA_VERSION` | CUDA 版本(仅 GPU) | `12.6.3` | `--build-arg CUDA_VERSION=12.6.3` |
+| `KANIKO_VERSION` | Kaniko executor 版本 | `v1.23.2` | `--build-arg KANIKO_VERSION=v1.23.2` |
+
+## 在 RunPod 环境中构建 Docker 镜像
+
+### 问题背景
+
+RunPod 会为您管理 Docker daemon,这意味着您无法在 Pod 内运行自己的 Docker 实例。这导致无法使用标准的 `docker build` 命令或 Docker-in-Docker (DinD) 方式。
+
+**您可能遇到的错误:**
+```
+failed to connect to the docker API at unix:///var/run/docker.sock
+dial unix /var/run/docker.sock: connect: no such file or directory
+```
+
+### 解决方案: Kaniko
+
+本 Runner 镜像内置了 **Kaniko**,这是一个无需 Docker daemon 即可构建容器镜像的工具。Kaniko 在用户空间中完全执行 Dockerfile 中的每个命令,非常适合 RunPod 等受限环境。
+
+### 使用 Kaniko
+
+#### 基本用法
+
+```bash
+# 构建并推送镜像
+kaniko \
+  --dockerfile=./Dockerfile \
+  --context=. \
+  --destination=docker.io/username/image:tag \
+  --cache=true \
+  --cache-repo=docker.io/username/cache
+```
+
+#### 在 GitHub Actions 工作流中使用
+
+```yaml
+name: 使用 Kaniko 构建
+on: [push]
+
+jobs:
+  build:
+    runs-on: self-hosted  # 您的 RunPod runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 配置 Kaniko 认证
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          mkdir -p /kaniko/.docker
+          echo '{"auths":{"https://index.docker.io/v1/":{"auth":"'$(echo -n $DOCKER_USERNAME:$DOCKER_PASSWORD | base64)'"}}}'  > /kaniko/.docker/config.json
+
+      - name: 构建并推送
+        run: |
+          kaniko \
+            --dockerfile=./Dockerfile \
+            --context=. \
+            --destination=docker.io/${{ secrets.DOCKER_USERNAME }}/image:${{ github.sha }} \
+            --cache=true
+```
+
+#### 完整示例
+
+查看 [`.github/workflows/example-kaniko-build.yml`](./.github/workflows/example-kaniko-build.yml) 获取完整的工作示例,包含:
+- Docker Hub 认证配置
+- 多标签支持
+- 缓存配置
+- 元数据标签
+
+### Kaniko 特性
+
+- ✅ **无需 Docker daemon** - 在 RunPod 环境中可用
+- ✅ **无需特权模式** - 更安全
+- ✅ **层缓存** - 加速构建
+- ✅ **多阶段构建** - 完整的 Dockerfile 支持
+- ✅ **镜像仓库推送** - 直接推送到 Docker Hub、GCR、ECR 等
+
+### Kaniko vs Docker
+
+| 特性 | Docker | Kaniko |
+|------|--------|--------|
+| 需要 daemon | 是 | 否 |
+| 特权模式 | 需要 | 不需要 |
+| 构建速度 | 更快 | 稍慢 |
+| 缓存支持 | 完整 | 良好 |
+| Dockerfile 兼容性 | 100% | ~95% |
+| RunPod 兼容 | ❌ 否 | ✅ 是 |
 
 ## 使用说明
 

@@ -1,0 +1,90 @@
+name: Example | Build Docker Image with Kaniko
+
+# This is an example workflow demonstrating how to build Docker images
+# using Kaniko in RunPod environment where Docker daemon is not available
+
+on:
+  workflow_dispatch:  # Manual trigger for testing
+  push:
+    branches:
+      - "example-kaniko"  # Only runs on example branch
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-with-kaniko:
+    runs-on: self-hosted  # Runs on RunPod self-hosted runner
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+      - name: Setup Kaniko authentication
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          # Create Kaniko config directory
+          mkdir -p /kaniko/.docker
+
+          # Create Docker Hub authentication config
+          cat > /kaniko/.docker/config.json <<EOF
+          {
+            "auths": {
+              "https://index.docker.io/v1/": {
+                "auth": "$(echo -n ${DOCKER_USERNAME}:${DOCKER_PASSWORD} | base64)"
+              }
+            }
+          }
+          EOF
+
+          echo "✅ Kaniko authentication configured"
+
+      - name: Build and push with Kaniko
+        run: |
+          echo "🔨 Building Docker image with Kaniko..."
+
+          kaniko \
+            --dockerfile=${{ github.workspace }}/Dockerfile \
+            --context=${{ github.workspace }} \
+            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.sha_short }} \
+            --destination=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.branch }} \
+            --cache=true \
+            --cache-repo=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-cache \
+            --cache-ttl=168h \
+            --compressed-caching=true \
+            --snapshot-mode=redo \
+            --use-new-run \
+            --label="org.opencontainers.image.created=${{ steps.meta.outputs.build_date }}" \
+            --label="org.opencontainers.image.revision=${{ github.sha }}" \
+            --label="org.opencontainers.image.source=${{ github.repositoryUrl }}" \
+            --label="org.opencontainers.image.version=${{ steps.meta.outputs.sha_short }}"
+
+          echo "✅ Image built and pushed successfully!"
+
+      - name: Clean up
+        if: always()
+        run: |
+          # Remove authentication config for security
+          rm -f /kaniko/.docker/config.json
+          echo "🧹 Cleaned up authentication config"
+
+      - name: Image information
+        run: |
+          echo "📦 Built images:"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.sha_short }}"
+          echo "  - ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.branch }}"
+          echo ""
+          echo "🔍 Pull command:"
+          echo "  docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.sha_short }}"

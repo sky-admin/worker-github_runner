@@ -133,6 +133,93 @@ You can customize the build using the following arguments:
 | `BUILD_TYPE` | Build type (gpu/cpu) | `gpu` | `--build-arg BUILD_TYPE=cpu` |
 | `RUNNER_VERSION` | GitHub Runner version | `2.330.0` | `--build-arg RUNNER_VERSION=2.330.0` |
 | `CUDA_VERSION` | CUDA version (GPU only) | `12.6.3` | `--build-arg CUDA_VERSION=12.6.3` |
+| `KANIKO_VERSION` | Kaniko executor version | `v1.23.2` | `--build-arg KANIKO_VERSION=v1.23.2` |
+
+## Building Docker Images in RunPod Environment
+
+### The Challenge
+
+RunPod manages the Docker daemon for you, which means you cannot run your own Docker instance inside a Pod. This prevents using standard `docker build` commands or Docker-in-Docker (DinD) approaches.
+
+**Error you might encounter:**
+```
+failed to connect to the docker API at unix:///var/run/docker.sock
+dial unix /var/run/docker.sock: connect: no such file or directory
+```
+
+### The Solution: Kaniko
+
+This runner image includes **Kaniko**, a tool for building container images without requiring a Docker daemon. Kaniko executes each command within a Dockerfile completely in userspace, making it perfect for restricted environments like RunPod.
+
+### Using Kaniko
+
+#### Basic Usage
+
+```bash
+# Build and push an image
+kaniko \
+  --dockerfile=./Dockerfile \
+  --context=. \
+  --destination=docker.io/username/image:tag \
+  --cache=true \
+  --cache-repo=docker.io/username/cache
+```
+
+#### In GitHub Actions Workflow
+
+```yaml
+name: Build with Kaniko
+on: [push]
+
+jobs:
+  build:
+    runs-on: self-hosted  # Your RunPod runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Kaniko auth
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          mkdir -p /kaniko/.docker
+          echo '{"auths":{"https://index.docker.io/v1/":{"auth":"'$(echo -n $DOCKER_USERNAME:$DOCKER_PASSWORD | base64)'"}}}'  > /kaniko/.docker/config.json
+
+      - name: Build and push
+        run: |
+          kaniko \
+            --dockerfile=./Dockerfile \
+            --context=. \
+            --destination=docker.io/${{ secrets.DOCKER_USERNAME }}/image:${{ github.sha }} \
+            --cache=true
+```
+
+#### Complete Example
+
+See [`.github/workflows/example-kaniko-build.yml`](./.github/workflows/example-kaniko-build.yml) for a complete working example with:
+- Docker Hub authentication
+- Multi-tag support
+- Caching configuration
+- Metadata labels
+
+### Kaniko Features
+
+- ✅ **No Docker daemon required** - Works in RunPod environment
+- ✅ **No privileged mode needed** - More secure
+- ✅ **Layer caching** - Speeds up builds
+- ✅ **Multi-stage builds** - Full Dockerfile support
+- ✅ **Registry push** - Direct push to Docker Hub, GCR, ECR, etc.
+
+### Kaniko vs Docker
+
+| Feature | Docker | Kaniko |
+|---------|--------|--------|
+| Requires daemon | Yes | No |
+| Privileged mode | Required | Not required |
+| Build speed | Faster | Slightly slower |
+| Cache support | Full | Good |
+| Dockerfile compatibility | 100% | ~95% |
+| RunPod compatible | ❌ No | ✅ Yes |
 
 ## Documentation
 

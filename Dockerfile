@@ -53,6 +53,18 @@ RUN mkdir actions-runner && cd actions-runner && \
 # Install additional dependencies
 RUN /actions-runner/bin/installdependencies.sh
 
+# Install Kaniko executor for building Docker images without Docker daemon
+ARG KANIKO_VERSION=v1.23.2
+RUN mkdir -p /kaniko && \
+    wget -q https://github.com/GoogleContainerTools/kaniko/releases/download/${KANIKO_VERSION}/executor-amd64 -O /kaniko/executor && \
+    chmod +x /kaniko/executor && \
+    ln -s /kaniko/executor /usr/local/bin/kaniko && \
+    mkdir -p /kaniko/.docker
+
+# Set Kaniko environment variables
+ENV PATH="/kaniko:${PATH}"
+ENV DOCKER_CONFIG=/kaniko/.docker
+
 # Add build type label for identification
 ARG BUILD_TYPE
 ARG RUNNER_VERSION
