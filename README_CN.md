@@ -34,6 +34,34 @@
 - 支持 NVIDIA CUDA 和 cuDNN,适合 GPU 密集型工作负载
 - 自动注册和注销 Runner,确保资源清理
 - 单次作业执行模式,每个 Worker 处理一个作业后退出
+- 支持 GPU 和 CPU 双版本:
+  - **GPU 版本**:包含 NVIDIA CUDA 12.6.3 和 cuDNN,适合 GPU 加速工作负载
+  - **CPU 版本**:轻量级版本,无 CUDA 依赖,适合纯 CPU 任务
+
+## 选择合适的版本
+
+本 Worker 提供两个版本以满足不同的工作负载需求:
+
+### GPU 版本(推荐用于 ML/AI 工作负载)
+- **基础镜像**: `nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04`
+- **使用场景**:
+  - 机器学习模型训练和推理
+  - GPU 加速测试(PyTorch、TensorFlow 等)
+  - 依赖 CUDA 的应用程序
+  - 需要 GPU 加速的计算密集型任务
+- **Docker 标签**: `:dev-gpu`、`:latest-gpu`、`:v1.0.0-gpu`
+
+### CPU 版本(推荐用于通用 CI/CD)
+- **基础镜像**: `ubuntu:24.04`
+- **使用场景**:
+  - 标准 CI/CD 流水线
+  - 单元测试和集成测试
+  - 代码检查和格式化
+  - 文档生成
+  - 通用自动化任务
+- **Docker 标签**: `:dev-cpu`、`:latest-cpu`、`:v1.0.0-cpu`
+
+**注意**: 两个版本都使用 GitHub Actions Runner v2.330.0,并支持相同的 RunPod Serverless 功能。
 
 ## 前置要求
 
@@ -61,13 +89,60 @@
 
 3. 构建 Docker 镜像:
 
+   **GPU 版本:**
    ```bash
-   docker build -t your-org/worker-github_runner .
+   docker build -t your-org/worker-github_runner:gpu .
+   ```
+
+   **CPU 版本:**
+   ```bash
+   docker build --build-arg BUILD_TYPE=cpu -t your-org/worker-github_runner:cpu .
+   ```
+
+   **或拉取预构建镜像:**
+   ```bash
+   # GPU 版本
+   docker pull runpod/worker-github_runner:latest-gpu
+
+   # CPU 版本
+   docker pull runpod/worker-github_runner:latest-cpu
    ```
 
 4. 配置必要的环境变量(参见下方[环境变量配置](#环境变量配置))。
 
 5. 将 Worker 部署到 RunPod 平台。
+
+## 技术细节
+
+### Docker 镜像
+
+#### GPU 版本
+- **基础镜像**: `nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04`
+- **GitHub Runner 版本**: `2.330.0`
+- **CUDA 支持**: 是(12.6.3 with cuDNN)
+- **镜像大小**: 约 4.5GB
+- **Python 依赖**:
+  - `runpod~=1.7.0`
+  - `requests==2.31.0`
+
+#### CPU 版本
+- **基础镜像**: `ubuntu:24.04`
+- **GitHub Runner 版本**: `2.330.0`
+- **CUDA 支持**: 否
+- **镜像大小**: 约 1.2GB
+- **Python 依赖**:
+  - `runpod~=1.7.0`
+  - `requests==2.31.0`
+
+### 构建参数
+
+您可以使用以下参数自定义构建:
+
+| 参数 | 说明 | 默认值 | 示例 |
+|------|------|--------|------|
+| `BUILD_TYPE` | 构建类型(gpu/cpu) | `gpu` | `--build-arg BUILD_TYPE=cpu` |
+| `RUNNER_VERSION` | GitHub Runner 版本 | `2.330.0` | `--build-arg RUNNER_VERSION=2.330.0` |
+| `CUDA_VERSION` | CUDA 版本(仅 GPU) | `12.6.3` | `--build-arg CUDA_VERSION=12.6.3` |
 
 ## 使用说明
 
@@ -306,29 +381,21 @@ jobs:
 
 ---
 
-## 技术细节
-
-### Docker 镜像
-
-- **基础镜像**: `nvidia/cuda:11.7.1-cudnn8-runtime-ubuntu20.04`
-- **GitHub Runner 版本**: `2.305.0`
-- **Python 依赖**:
-  - `runpod~=1.7.0` (使用兼容版本操作符 `~=`)
-  - `requests==2.31.0`
-
-### 架构说明
+## 架构说明
 
 - **单次执行模式**: 每个 Worker 使用 `--once` 标志,处理一个作业后退出
 - **Runner 命名**: Runner 名称设置为 RunPod Pod ID,便于追踪
 - **Worker 刷新**: Handler 使用 `refresh_worker: True` 配置,确保作业间的清洁状态
-- **版本固定**: GitHub Runner 版本在 Dockerfile ARG 中硬编码(当前为 2.305.0)
+- **版本管理**: GitHub Runner 版本通过 Dockerfile ARG 参数控制(当前为 2.330.0)
+- **双版本支持**: 通过 BUILD_TYPE 参数选择 GPU 或 CPU 版本
 
-### 故障排查
+## 故障排查
 
 如果遇到问题,请检查:
 
 1. GitHub PAT 是否具有正确的权限
-2. GitHub 组织名称是否正确
+2. GitHub 组织名称或仓库路径是否正确
 3. RunPod API 密钥是否有效
 4. Runner 标签是否在工作流中正确指定
-5. 查看 RunPod 日志以获取详细错误信息
+5. 选择的镜像版本(GPU/CPU)是否适合您的工作负载
+6. 查看 RunPod 日志以获取详细错误信息

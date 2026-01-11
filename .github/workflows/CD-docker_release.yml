@@ -7,6 +7,9 @@ on:
 jobs:
   docker:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: [gpu, cpu]
     steps:
       - name: Clear Space
         run: |
@@ -15,20 +18,35 @@ jobs:
           rm -rf "/usr/local/share/boost"
           rm -rf "$AGENT_TOOLSDIRECTORY"
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v4
+      - name: Build and push ${{ matrix.build_type }} version
+        uses: docker/build-push-action@v5
         with:
+          context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_REPO }}/${{ secrets.DOCKERHUB_IMG }}:${{ github.event.release.tag_name }}
+          tags: |
+            ${{ secrets.DOCKERHUB_REPO }}/${{ secrets.DOCKERHUB_IMG }}:${{ github.event.release.tag_name }}-${{ matrix.build_type }}
+            ${{ secrets.DOCKERHUB_REPO }}/${{ secrets.DOCKERHUB_IMG }}:latest-${{ matrix.build_type }}
+          build-args: |
+            BUILD_TYPE=${{ matrix.build_type }}
+            RUNNER_VERSION=2.330.0
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_REPO }}/${{ secrets.DOCKERHUB_IMG }}:buildcache-${{ matrix.build_type }}
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_REPO }}/${{ secrets.DOCKERHUB_IMG }}:buildcache-${{ matrix.build_type }},mode=max
+          labels: |
+            build_type=${{ matrix.build_type }}
+            runner_version=2.330.0
+            release_tag=${{ github.event.release.tag_name }}
